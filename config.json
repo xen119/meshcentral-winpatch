@@ -1,0 +1,14 @@
+{
+  "name": "meshcentral-plugin-patch",
+  "author": "Your Name",
+  "description": "Patch management plugin for MeshCentral (Windows-focused scaffold)",
+  "version": "0.2.0",
+  "minServerVersion": "0.8.0",
+  "files": [
+    "patch.js"
+  ],
+  "js": [
+    { "file": "patch.js", "module": "patch" }
+  ]
+}
+
