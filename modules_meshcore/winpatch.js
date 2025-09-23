@@ -1,6 +1,6 @@
 /**
  * Client-side plugin UI — inject floating button and call server plugin handler
- * Version: 0.0.11-client
+ * Version: 0.0.12
  */
 
 "use strict";
