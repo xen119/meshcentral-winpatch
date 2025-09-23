@@ -1,8 +1,7 @@
 /**
 * @description MeshCentral Windows Patch Management Plugin
-* @author
 * @license Apache-2.0
-* @version v0.0.1
+* @version v0.0.2
 */
 
 "use strict";
@@ -10,30 +9,39 @@
 module.exports.winpatch = function (parent) {
     var obj = {};
     obj.parent = parent;
+
+    // IMPORTANT: export the hook so MeshCentral calls it
     obj.exports = [
-        "onDeviceRefreshEnd" // hook: when device info is refreshed
+        "onDeviceRefreshEnd"
     ];
 
-    // Add a Patch Management button when viewing a Windows device
+    // Called whenever a device page refreshes
     obj.onDeviceRefreshEnd = function () {
-        if (!currentNode || !currentNode.agent || currentNode.agent.id.toLowerCase().indexOf("win") === -1) return;
+        try {
+            if (!currentNode || !currentNode.agent) return;
+            // Only add button for Windows agents
+            if (currentNode.agent.id.toLowerCase().indexOf("win") === -1) return;
 
-        // Insert button into device UI
-        var container = Q('d2devButtonBar');
-        if (!Q('winpatchBtn')) {
+            var container = Q('d2devButtonBar');
+            if (!container || Q('winpatchBtn')) return; // already added
+
             var btn = document.createElement('input');
             btn.type = 'button';
             btn.id = 'winpatchBtn';
+            btn.className = 'button';
             btn.value = 'Run Windows Update';
+
             btn.onclick = function () {
-                // Send a message to the agent to trigger Windows Update
-                sendAgentCommand(currentNode._id, {
-                    action: "powershell",
-                    value: "Install-WindowsUpdate -AcceptAll -AutoReboot"
+                meshserver.sendCommand(currentNode._id, {
+                    type: "powershell",
+                    command: "Install-WindowsUpdate -AcceptAll -AutoReboot"
                 });
                 alert('Windows Update triggered on ' + currentNode.name);
             };
+
             container.appendChild(btn);
+        } catch (e) {
+            console.log("winpatch error:", e);
         }
     };
 
