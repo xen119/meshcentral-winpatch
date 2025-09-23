@@ -1,7 +1,7 @@
 /**
- * @description MeshCentral Windows Patch Management Plugin (UI + server)
+ * @description MeshCentral Windows Patch Management Plugin (AJAX direct)
  * @license Apache-2.0
- * @version v0.2.0
+ * @version v0.2.1
  */
 
 "use strict";
@@ -31,23 +31,36 @@ module.exports.winpatch = function (parent) {
                 btn.style.borderRadius = '6px';
                 btn.style.cursor = 'pointer';
                 btn.style.fontSize = '14px';
-                btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
 
                 btn.onclick = function () {
-                    // Simple smoke test first: create C:\temp\mesh-test.txt
-                    var cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path C:\\\\temp | Out-Null; 'hello from mesh' | Out-File -Encoding ascii C:\\\\temp\\\\mesh-test.txt\"";
+                    // Smoke test: create C:\temp\mesh-test.txt
+                    var psCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path C:\\\\temp | Out-Null; 'hello from mesh' | Out-File -Encoding ascii C:\\\\temp\\\\mesh-test.txt\"";
 
-                    // Use MeshCentral's built-in sendMeshCmd to call our server plugin
-                    if (typeof sendMeshCmd === 'function') {
-                        sendMeshCmd("plugin", {
-                            plugin: "winpatch",
-                            nodeid: currentNode._id,
-                            data: { action: "run", command: cmd }
-                        });
-                        alert("Command request sent to server, check device shortly.");
-                    } else {
-                        alert("sendMeshCmd not available in this UI build.");
-                    }
+                    var payload = {
+                        nodeid: currentNode._id,
+                        data: { action: "run", command: psCmd }
+                    };
+
+                    fetch("plugin.ashx?plugin=winpatch", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(r => r.text())
+                    .then(t => {
+                        console.log("[winpatch] raw server response:", t);
+                        try {
+                            var res = JSON.parse(t);
+                            if (res.ok) {
+                                alert("Server accepted request. Check C:\\temp\\mesh-test.txt");
+                            } else {
+                                alert("Server error: " + (res.error || "unknown"));
+                            }
+                        } catch (e) {
+                            alert("Unexpected server response: " + t);
+                        }
+                    })
+                    .catch(err => alert("AJAX error: " + err.toString()));
                 };
 
                 document.body.appendChild(btn);
@@ -67,12 +80,15 @@ module.exports.winpatch = function (parent) {
 
                     if (nodeid && data && data.command) {
                         parent.parent.SendCommandToAgent(nodeid, { type: 'run', command: data.command });
-                        res.send({ ok: true });
+                        res.setHeader("Content-Type", "application/json");
+                        res.send(JSON.stringify({ ok: true }));
                     } else {
-                        res.send({ ok: false, error: "invalid request" });
+                        res.setHeader("Content-Type", "application/json");
+                        res.send(JSON.stringify({ ok: false, error: "invalid request" }));
                     }
                 } catch (e) {
-                    res.send({ ok: false, error: e.toString() });
+                    res.setHeader("Content-Type", "application/json");
+                    res.send(JSON.stringify({ ok: false, error: e.toString() }));
                 }
             };
         }
