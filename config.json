@@ -1,7 +1,7 @@
 {
   "name": "Windows Patch Management",
   "shortName": "winpatch",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "author": "XEN119",
   "description": "Trigger Windows Update scans and installs from the MeshCentral web UI.",
   "hasAdminPanel": false,
