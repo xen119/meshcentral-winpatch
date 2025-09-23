@@ -39,7 +39,7 @@ module.exports.patch = function(parent) {
           <div style="font-weight:600">Patch Scan Results</div>
           <button id="patchModalClose" class="dialogCloseButton" title="Close">×</button>
         </div>
-        <div id="patchModalBody" style="padding:12px; max-height:50vh; overflow:auto; font-size:12px"></div>
+        <div id="patchModalMsg" style="padding:8px 12px; color:#e0a800; display:none"></div><div id="patchModalErr" style="padding:8px 12px; color:#dc3545; display:none"></div><div id="patchModalBody" style="padding:12px; max-height:50vh; overflow:auto; font-size:12px"></div>
         <div style="padding:12px; display:flex; gap:8px; justify-content:space-between; align-items:center;">
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="checkbox" id="patchSelectAll"></input>
@@ -314,4 +314,6 @@ if ($hasPswu) {
 
   return obj;
 };
+
+
 

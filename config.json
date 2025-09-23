@@ -1,14 +1,20 @@
 {
   "name": "meshcentral-plugin-patch",
-  "author": "Your Name",
-  "description": "Patch management plugin for MeshCentral (Windows-focused scaffold)",
+  "shortName": "patch",
   "version": "0.2.0",
-  "minServerVersion": "0.8.0",
-  "files": [
-    "patch.js"
-  ],
-  "js": [
-    { "file": "patch.js", "module": "patch" }
-  ]
-}
+  "author": "xen119",
+  "description": "Patch management plugin for MeshCentral (Windows-focused).",
+  "hasAdminPanel": false,
 
+  "homepage": "https://github.com/xen119/patch-manager",
+  "changelogUrl": "https://raw.githubusercontent.com/xen119/patch-manager/main/CHANGELOG.md",
+  "configUrl": "https://raw.githubusercontent.com/xen119/patch-manager/main/patch-mananger/config.json",
+  "downloadUrl": "https://github.com/xen119/patch-manager/archive/refs/heads/main.zip",
+  "repository": { "type": "git", "url": "https://github.com/xen119/patch-manager.git" },
+  "versionHistoryUrl": "https://api.github.com/repos/xen119/patch-manager/tags",
+  "meshCentralCompat": ">=0.8.0",
+
+  "minServerVersion": "0.8.0",
+  "files": ["patch.js"],
+  "js": [{ "file": "patch.js", "module": "patch" }]
+}
