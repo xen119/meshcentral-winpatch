@@ -1,0 +1,18 @@
+{
+  "name": "Windows Patch Management",
+  "shortName": "winpatch",
+  "version": "0.0.1",
+  "author": "XEN119",
+  "description": "Trigger Windows Update scans and installs from the MeshCentral web UI.",
+  "hasAdminPanel": false,
+  "homepage": "https://github.com/xen119/meshcentral-winpatch",
+  "changelogUrl": "https://raw.githubusercontent.com/xen119/meshcentral-winpatch/master/changelog.md",
+  "configUrl": "https://raw.githubusercontent.com/xen119/meshcentral-winpatch/master/config.json",
+  "downloadUrl": "https://github.com/xen119/meshcentral-winpatch/archive/master.zip",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xen119/meshcentral-winpatch.git"
+  },
+  "versionHistoryUrl": "https://api.github.com/repos/davidnefdt/meshcentral-winpatch/tags",
+  "meshCentralCompat": ">=0.4.4-s"
+}
