@@ -1,7 +1,7 @@
 /**
- * @description MeshCentral Windows Patch Management Plugin (server + client injection)
+ * @description MeshCentral Windows Patch Management Plugin
  * @license Apache-2.0
- * @version v0.0.13
+ * @version v0.1.0
  */
 
 "use strict";
@@ -11,10 +11,9 @@ module.exports.winpatch = function (parent) {
     obj.parent = parent;
     obj.pluginName = "winpatch";
 
-    // Export hooks for UI injection
     obj.exports = ["onDeviceRefreshEnd"];
 
-    // Client-side: inject floating button
+    // Client-side hook
     obj.onDeviceRefreshEnd = function () {
         try {
             if (!document.getElementById('winpatchFloatingBtn')) {
@@ -31,23 +30,32 @@ module.exports.winpatch = function (parent) {
                 btn.style.border = 'none';
                 btn.style.borderRadius = '6px';
                 btn.style.cursor = 'pointer';
-                btn.style.fontSize = '14px';
 
                 btn.onclick = function () {
-                    if (typeof meshserver !== 'undefined' && typeof meshserver.performAction === 'function') {
-                        meshserver.performAction('plugin', {
-                            plugin: 'winpatch',
-                            nodeid: currentNode._id,
-                            data: {
-                                action: 'run',
-                                command: "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Install-WindowsUpdate -AcceptAll -AutoReboot\""
+                    var payload = {
+                        action: 'run',
+                        command: "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Install-WindowsUpdate -AcceptAll -AutoReboot\""
+                    };
+
+                    // Send AJAX POST directly to plugin handler
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("POST", "pluginHandler.ashx?plugin=winpatch&nodeid=" + encodeURIComponent(currentNode._id), true);
+                    xhr.setRequestHeader("Content-Type", "application/json");
+                    xhr.onreadystatechange = function () {
+                        if (xhr.readyState === 4) {
+                            try {
+                                var res = JSON.parse(xhr.responseText);
+                                if (res.ok) {
+                                    alert("Command sent to server, check device events.");
+                                } else {
+                                    alert("Server error: " + (res.error || 'unknown'));
+                                }
+                            } catch (e) {
+                                alert("Unexpected response from server");
                             }
-                        }, function (res) {
-                            alert(res && res.ok ? 'Command sent to server' : 'Failed: ' + (res.error || 'unknown'));
-                        });
-                    } else {
-                        alert('meshserver.performAction not available');
-                    }
+                        }
+                    };
+                    xhr.send(JSON.stringify({ data: payload }));
                 };
 
                 document.body.appendChild(btn);
@@ -57,13 +65,13 @@ module.exports.winpatch = function (parent) {
         }
     };
 
-    // Server-side: register handler
+    // Server-side handler
     obj.server_startup = function () {
         if (parent.webserver && parent.webserver.pluginHandler) {
             parent.webserver.pluginHandler[obj.pluginName] = function (user, action, query, body, req, res) {
                 try {
-                    const nodeid = (body && body.nodeid) || query.nodeid;
-                    const data = (body && body.data) || query.data;
+                    const nodeid = query.nodeid || (body && body.nodeid);
+                    const data = (body && body.data);
                     if (!nodeid || !data || !data.command) {
                         res.send({ ok: false, error: 'invalid request' });
                         return;
