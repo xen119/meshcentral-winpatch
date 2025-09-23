@@ -1,7 +1,7 @@
 /**
- * @description MeshCentral Windows Patch Management Plugin (force button visible)
+ * @description MeshCentral Windows Patch Management Plugin
  * @license Apache-2.0
- * @version v0.0.7
+ * @version v0.0.8
  */
 
 "use strict";
@@ -11,42 +11,42 @@ module.exports.winpatch = function (parent) {
     obj.parent = parent;
 
     // Export the hook so MeshCentral calls it
-    obj.exports = [
-        "onDeviceRefreshEnd"
-    ];
+    obj.exports = ["onDeviceRefreshEnd"];
 
-    // Called whenever a device page refreshes
     obj.onDeviceRefreshEnd = function () {
-    try {
-        alert("WinPatch hook fired, scanning DOM...");
+        try {
+            // Confirm hook fired (same as sample plugin)
+            writeDeviceEvent(encodeURIComponent(currentNode._id));
+            Q('d2devEvent').value = Date().toLocaleString() + ': WinPatch hook fired';
+            focusTextBox('d2devEvent');
 
-        // Dump IDs of all divs
-        var divs = document.getElementsByTagName('div');
-        var ids = [];
-        for (var i = 0; i < divs.length; i++) {
-            if (divs[i].id) ids.push(divs[i].id);
-        }
-        alert("Found div IDs: " + ids.join(", "));
+            // Pick a device button slot container
+            var container = document.getElementById('devViewPageButton5');
+            if (!container) container = document.getElementById('devViewPageButton4');
+            if (!container) container = document.getElementById('devViewPageButton3');
 
-        // Try to inject button into the first found container
-        if (divs.length > 0) {
-            var target = divs[0];
-            if (!document.getElementById('winpatchBtn')) {
+            if (container && !document.getElementById('winpatchBtn')) {
                 var btn = document.createElement('input');
                 btn.type = 'button';
                 btn.id = 'winpatchBtn';
-                btn.value = 'HELLO WORLD BUTTON';
-                btn.onclick = function () { alert('Button clicked!'); };
-                target.appendChild(btn);
-                alert("Button appended to div id=" + target.id);
+                btn.className = 'button';
+                btn.value = 'Run Windows Update';
+
+                btn.onclick = function () {
+                    writeDeviceEvent(encodeURIComponent(currentNode._id));
+                    Q('d2devEvent').value = Date().toLocaleString() +
+                        ': WinPatch - Run Windows Update requested';
+                    focusTextBox('d2devEvent');
+
+                    alert('Run Windows Update requested for ' + currentNode.name);
+                };
+
+                container.appendChild(btn);
             }
+        } catch (err) {
+            console.log("winpatch:onDeviceRefreshEnd error:", err);
         }
-    } catch (err) {
-        alert("Error: " + err.toString());
-    }
-};
-
-
+    };
 
     return obj;
 };
