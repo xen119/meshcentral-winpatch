@@ -1,7 +1,7 @@
 /**
- * @description MeshCentral Windows Patch Management Plugin (client + server)
+ * @description MeshCentral Windows Patch Management Plugin (UI + server)
  * @license Apache-2.0
- * @version v0.1.1
+ * @version v0.2.0
  */
 
 "use strict";
@@ -16,7 +16,6 @@ module.exports.winpatch = function (parent) {
 
     obj.onDeviceRefreshEnd = function () {
         try {
-            // Floating button (always visible)
             if (!document.getElementById('winpatchFloatingBtn')) {
                 var btn = document.createElement('button');
                 btn.id = 'winpatchFloatingBtn';
@@ -35,38 +34,20 @@ module.exports.winpatch = function (parent) {
                 btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
 
                 btn.onclick = function () {
-                    // SAFER smoke test command first (creates C:\temp\mesh-test.txt)
-                    // Swap to Windows Update after end-to-end works.
-                    var psCmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path C:\\\\temp | Out-Null; 'hello from mesh' | Out-File -Encoding ascii C:\\\\temp\\\\mesh-test.txt\"";
+                    // Simple smoke test first: create C:\temp\mesh-test.txt
+                    var cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command \"New-Item -ItemType Directory -Force -Path C:\\\\temp | Out-Null; 'hello from mesh' | Out-File -Encoding ascii C:\\\\temp\\\\mesh-test.txt\"";
 
-                    var payload = {
-                        action: 'run',
-                        command: psCmd
-                        // To switch to Windows Update later:
-                        // command: "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Install-WindowsUpdate -AcceptAll -AutoReboot\""
-                    };
-
-                    // POST directly to plugin handler (no meshserver.performAction dependency)
-                    var xhr = new XMLHttpRequest();
-                    xhr.open("POST", "pluginHandler.ashx?plugin=winpatch&nodeid=" + encodeURIComponent(currentNode._id), true);
-                    xhr.setRequestHeader("Content-Type", "application/json");
-                    xhr.onreadystatechange = function () {
-                        if (xhr.readyState === 4) {
-                            var raw = xhr.responseText || '';
-                            console.log("[winpatch] server response:", raw);
-                            try {
-                                var res = JSON.parse(raw);
-                                if (res && res.ok) {
-                                    alert("Command sent to server. Check device for C:\\temp\\mesh-test.txt");
-                                } else {
-                                    alert("Server error: " + (res && res.error ? res.error : 'unknown'));
-                                }
-                            } catch (e) {
-                                alert("Raw server response: " + raw);
-                            }
-                        }
-                    };
-                    xhr.send(JSON.stringify({ data: payload }));
+                    // Use MeshCentral's built-in sendMeshCmd to call our server plugin
+                    if (typeof sendMeshCmd === 'function') {
+                        sendMeshCmd("plugin", {
+                            plugin: "winpatch",
+                            nodeid: currentNode._id,
+                            data: { action: "run", command: cmd }
+                        });
+                        alert("Command request sent to server, check device shortly.");
+                    } else {
+                        alert("sendMeshCmd not available in this UI build.");
+                    }
                 };
 
                 document.body.appendChild(btn);
@@ -78,46 +59,22 @@ module.exports.winpatch = function (parent) {
 
     // --- SERVER (Node.js on MeshCentral) ---
     obj.server_startup = function () {
-        try {
-            if (parent.webserver && parent.webserver.pluginHandler) {
-                parent.webserver.pluginHandler[obj.pluginName] = function (user, action, query, body, req, res) {
-                    try {
-                        // Normalize inputs
-                        var nodeid = (query && query.nodeid) || (body && body.nodeid);
-                        var data = (body && body.data) || null;
+        if (parent.webserver && parent.webserver.pluginHandler) {
+            parent.webserver.pluginHandler[obj.pluginName] = function (user, action, query, body, req, res) {
+                try {
+                    var nodeid = (body && body.nodeid) || (query && query.nodeid);
+                    var data = (body && body.data) || (query && query.data);
 
-                        // Some servers hand us a string body; try parse
-                        if (!data && typeof body === 'string') {
-                            try { var parsed = JSON.parse(body); data = parsed && parsed.data; } catch (e) {}
-                        }
-
-                        // Validate
-                        if (!nodeid || !data || !data.command) {
-                            res.setHeader('Content-Type', 'application/json');
-                            res.send(JSON.stringify({ ok: false, error: 'invalid request (nodeid/command missing)' }));
-                            return;
-                        }
-
-                        // Forward to agent: run arbitrary command
-                        try {
-                            parent.parent.SendCommandToAgent(nodeid, { type: 'run', command: data.command });
-                            res.setHeader('Content-Type', 'application/json');
-                            res.send(JSON.stringify({ ok: true }));
-                        } catch (ex) {
-                            // If this call isn't available in your build, you'll see error here.
-                            res.setHeader('Content-Type', 'application/json');
-                            res.send(JSON.stringify({ ok: false, error: 'SendCommandToAgent failed: ' + ex.toString() }));
-                        }
-                    } catch (e) {
-                        res.setHeader('Content-Type', 'application/json');
-                        res.send(JSON.stringify({ ok: false, error: e.toString() }));
+                    if (nodeid && data && data.command) {
+                        parent.parent.SendCommandToAgent(nodeid, { type: 'run', command: data.command });
+                        res.send({ ok: true });
+                    } else {
+                        res.send({ ok: false, error: "invalid request" });
                     }
-                };
-            }
-        } catch (e) {
-            try {
-                parent.debug('[winpatch] server_startup error: ' + e.toString());
-            } catch (_) {}
+                } catch (e) {
+                    res.send({ ok: false, error: e.toString() });
+                }
+            };
         }
     };
 
