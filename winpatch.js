@@ -1,7 +1,7 @@
 /**
- * @description MeshCentral Windows Patch Management Plugin (floating overlay button)
+ * @description MeshCentral Windows Patch Management Plugin (floating button with agent command)
  * @license Apache-2.0
- * @version v0.0.9
+ * @version v0.0.10
  */
 
 "use strict";
@@ -25,7 +25,7 @@ module.exports.winpatch = function (parent) {
                 btn.id = 'winpatchFloatingBtn';
                 btn.innerText = 'Run Windows Update';
 
-                // Style it so it's always visible in bottom-right corner
+                // Style for bottom-right corner
                 btn.style.position = 'fixed';
                 btn.style.bottom = '20px';
                 btn.style.right = '20px';
@@ -40,12 +40,34 @@ module.exports.winpatch = function (parent) {
                 btn.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
 
                 btn.onclick = function () {
+                    // Log the click
                     writeDeviceEvent(encodeURIComponent(currentNode._id));
                     Q('d2devEvent').value = Date().toLocaleString() +
-                        ': WinPatch - Run Windows Update requested';
+                        ': WinPatch - Windows Update requested';
                     focusTextBox('d2devEvent');
 
-                    alert('Run Windows Update requested for ' + currentNode.name);
+                    // Payload to send to agent
+                    var payload = {
+                        type: "powershell",
+                        // Simple command: scans and installs updates silently
+                        command: "Install-WindowsUpdate -AcceptAll -AutoReboot"
+                    };
+
+                    // Try standard MeshCentral UI command senders
+                    if (typeof sendAgentCommand === 'function') {
+                        try { sendAgentCommand(currentNode._id, payload); }
+                        catch (e) { alert('sendAgentCommand failed: ' + e.toString()); }
+                        return;
+                    }
+
+                    if (typeof meshserver !== 'undefined' && meshserver.sendCommand) {
+                        try { meshserver.sendCommand(currentNode._id, payload); }
+                        catch (e) { alert('meshserver.sendCommand failed: ' + e.toString()); }
+                        return;
+                    }
+
+                    // If no API available
+                    alert('Could not send command to agent. Action logged only.');
                 };
 
                 document.body.appendChild(btn);
