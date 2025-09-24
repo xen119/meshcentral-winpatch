@@ -5,38 +5,39 @@
 
 "use strict";
 
-function consoleaction(args, rights, sessionid, parent) {
-    if (args.pluginaction === "runUpdate") {
-        var os = require('os').platform();
-        var cmd;
+(function () {
+    if (process.platform !== "win32" && process.platform !== "linux") return;
 
-        if (os === "win32") {
-            // Needs PSWindowsUpdate module on endpoint
-            cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
-        } else {
-            cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
-        }
+    var pluginName = "winpatch";
 
+    addServerListener(pluginName, function (msg) {
         try {
+            if (!msg || msg.pluginaction !== "runUpdate") return;
+
+            var os = require('os').platform();
+            var cmd;
+
+            if (os === "win32") {
+                // Requires PSWindowsUpdate installed on the endpoint
+                cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
+            } else {
+                cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
+            }
+
             process.exec(cmd, function (exitCode, stdout, stderr) {
-                parent.SendCommand({
-                    action: "plugin",
-                    plugin: "winpatch",
+                sendAgentMsg(pluginName, {
                     pluginaction: "updateResult",
-                    nodeId: parent.dbNodeKey,
-                    output: stderr && stderr.length ? stderr : stdout
+                    ok: (exitCode === 0),
+                    stdout: stdout ? stdout.toString() : "",
+                    stderr: stderr ? stderr.toString() : ""
                 });
             });
         } catch (e) {
-            parent.SendCommand({
-                action: "plugin",
-                plugin: "winpatch",
+            sendAgentMsg(pluginName, {
                 pluginaction: "updateResult",
-                nodeId: parent.dbNodeKey,
-                output: "Execution failed: " + e.toString()
+                ok: false,
+                error: e.toString()
             });
         }
-    }
-}
-
-module.exports = { consoleaction: consoleaction };
+    });
+})();

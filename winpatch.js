@@ -66,5 +66,18 @@ module.exports.winpatch = function (parent) {
         }
     };
 
+    obj.server_startup = function () {
+    if (parent.parent.AddPluginHandler) {
+        parent.parent.AddPluginHandler("winpatch", function (msg) {
+            // msg comes from sendAgentMsg in meshcore
+            if (msg && msg.pluginaction === "updateResult") {
+                // Relay to any web tabs
+                pluginHandler.dispatchEvent("winpatch", msg);
+            }
+        });
+    }
+};
+
+
     return obj;
 }

@@ -20,8 +20,15 @@
     // Handle response from agent
     parent.pluginHandler.winpatch = {};
     parent.pluginHandler.winpatch.updateResult = function(message) {
-      QH('output', message.output || "No output");
+    let text = "";
+    if (message.ok) {
+        text = message.stdout || "Update completed successfully.";
+    } else {
+        text = message.error || message.stderr || "Update failed.";
+    }
+    QH('output', text);
     };
+
   </script>
 </body>
 </html>
