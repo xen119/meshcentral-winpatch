@@ -5,39 +5,44 @@
 
 "use strict";
 
-(function () {
-    if (process.platform !== "win32" && process.platform !== "linux") return;
+function consoleaction(args, rights, sessionid, parent) {
+    try {
+        if (!args || args.action !== "plugin" || args.plugin !== "winpatch") return;
 
-    var pluginName = "winpatch";
-
-    addServerListener(pluginName, function (msg) {
-        try {
-            if (!msg || msg.pluginaction !== "runUpdate") return;
-
-            var os = require('os').platform();
+        if (args.pluginaction === "runUpdate") {
+            var os = require("os").platform();
             var cmd;
 
             if (os === "win32") {
-                // Requires PSWindowsUpdate installed on the endpoint
+                // Needs PSWindowsUpdate on endpoint
                 cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
             } else {
                 cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
             }
 
             process.exec(cmd, function (exitCode, stdout, stderr) {
-                sendAgentMsg(pluginName, {
+                parent.SendCommand({
+                    action: "plugin",
+                    plugin: "winpatch",
                     pluginaction: "updateResult",
+                    nodeId: parent.dbNodeKey,
                     ok: (exitCode === 0),
                     stdout: stdout ? stdout.toString() : "",
                     stderr: stderr ? stderr.toString() : ""
                 });
             });
-        } catch (e) {
-            sendAgentMsg(pluginName, {
-                pluginaction: "updateResult",
-                ok: false,
-                error: e.toString()
-            });
         }
-    });
-})();
+    } catch (e) {
+        parent.SendCommand({
+            action: "plugin",
+            plugin: "winpatch",
+            pluginaction: "updateResult",
+            nodeId: parent.dbNodeKey,
+            ok: false,
+            error: e.toString()
+        });
+    }
+}
+
+module.exports = { consoleaction: consoleaction };
+
