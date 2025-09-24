@@ -17,9 +17,10 @@
     });
     }
 
-    parent.pluginHandler.winpatch = {};
+    parent.pluginHandler.winpatch = parent.pluginHandler.winpatch || {};
     parent.pluginHandler.winpatch.updateResult = function(msg) {
-    QH('output', msg.output || "No output returned");
+      try { console.log('winpatch UI updateResult:', msg); } catch (e) {}
+      QH('output', (msg && msg.output) ? msg.output : "No output returned");
     };
 
   </script>
