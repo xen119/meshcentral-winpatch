@@ -20,16 +20,34 @@ function consoleaction(args, rights, sessionid, parent) {
                 cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
             }
 
-            // Use MeshAgent's exec2
-            process.exec2(cmd, function (exitCode, stdout, stderr) {
-                parent.SendCommand({
-                    action: "plugin",
-                    plugin: "winpatch",
-                    pluginaction: "updateResult",
-                    ok: (exitCode === 0),
-                    output: stderr && stderr.length ? stderr.toString() : stdout.toString()
+            // Use Node-compatible child_process in MeshAgent modules_meshcore context
+            // Prefer execFile for better quoting/args handling
+            var cp = require('child_process');
+            var child;
+            if (os === "win32") {
+                // Execute PowerShell with arguments
+                child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
+                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Install-WindowsUpdate -AcceptAll -AutoReboot'
+                ], { windowsHide: true }, function(error, stdout, stderr){
+                    parent.SendCommand({
+                        action: "plugin",
+                        plugin: "winpatch",
+                        pluginaction: "updateResult",
+                        ok: !error,
+                        output: (stderr && stderr.length ? stderr.toString() : stdout.toString()) || (error ? String(error) : '')
+                    });
                 });
-            });
+            } else {
+                child = cp.exec(cmd, function(error, stdout, stderr){
+                    parent.SendCommand({
+                        action: "plugin",
+                        plugin: "winpatch",
+                        pluginaction: "updateResult",
+                        ok: !error,
+                        output: (stderr && stderr.length ? stderr.toString() : stdout.toString()) || (error ? String(error) : '')
+                    });
+                });
+            }
         }
     } catch (e) {
         parent.SendCommand({
