@@ -26,8 +26,9 @@ function consoleaction(args, rights, sessionid, parent) {
             var child;
             if (os === "win32") {
                 // Execute PowerShell with arguments
+                // For wiring test, emit a simple message. Swap back to PSWindowsUpdate once verified.
                 child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
-                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Install-WindowsUpdate -AcceptAll -AutoReboot'
+                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Write-Output "WinPatch test"'
                 ], { windowsHide: true }, function(error, stdout, stderr){
                     try {
                         var out = (stdout == null ? '' : String(stdout));
