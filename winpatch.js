@@ -59,8 +59,6 @@ module.exports.winpatch = function (parent) {
 
             case "updateResult":
                 console.log("winpatch: result:", command.output);
-                // Relay to UI
-                pluginHandler.dispatchEvent("winpatch", command);
                 break;
         }
     };

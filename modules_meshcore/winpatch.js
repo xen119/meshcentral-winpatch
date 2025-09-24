@@ -14,12 +14,14 @@ function consoleaction(args, rights, sessionid, parent) {
             var cmd;
 
             if (os === "win32") {
+                // PSWindowsUpdate must be installed on the endpoint
                 cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
             } else {
                 cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
             }
 
-            process.exec(cmd, function (exitCode, stdout, stderr) {
+            // Use MeshAgent's exec2
+            process.exec2(cmd, function (exitCode, stdout, stderr) {
                 parent.SendCommand({
                     action: "plugin",
                     plugin: "winpatch",
