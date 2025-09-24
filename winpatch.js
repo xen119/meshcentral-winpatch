@@ -46,37 +46,36 @@ module.exports.winpatch = function (parent) {
     obj.serveraction = function (command) {
         switch (command.pluginaction) {
             case "runUpdate":
-                var nodeId = command.nodeId;
-                var jObj = {
-                    action: "plugin",
-                    plugin: "winpatch",
-                    pluginaction: "runUpdate",
-                    nodeId: nodeId
-                };
                 try {
-                    obj.parent.parent.webserver.wsagents[nodeId].send(JSON.stringify(jObj));
+                    obj.parent.parent.webserver.wsagents[command.nodeId].send(JSON.stringify({
+                        action: "plugin",
+                        plugin: "winpatch",
+                        pluginaction: "runUpdate"
+                    }));
                 } catch (e) {
                     console.log("winpatch: failed to send command", e);
                 }
                 break;
 
             case "updateResult":
-                console.log("winpatch: result from node", command.nodeId, command.output);
+                console.log("winpatch: result:", command.output);
+                // Relay to UI
+                pluginHandler.dispatchEvent("winpatch", command);
                 break;
         }
     };
 
     obj.server_startup = function () {
-    if (parent.parent.AddPluginHandler) {
-        parent.parent.AddPluginHandler("winpatch", function (msg) {
-            // msg comes from sendAgentMsg in meshcore
-            if (msg && msg.pluginaction === "updateResult") {
-                // Relay to any web tabs
-                pluginHandler.dispatchEvent("winpatch", msg);
-            }
-        });
-    }
-};
+        if (parent.parent.AddPluginHandler) {
+            parent.parent.AddPluginHandler("winpatch", function (msg) {
+                // msg comes from sendAgentMsg in meshcore
+                if (msg && msg.pluginaction === "updateResult") {
+                    // Relay to any web tabs
+                    pluginHandler.dispatchEvent("winpatch", msg);
+                }
+            });
+        }
+    };
 
 
     return obj;

@@ -9,26 +9,22 @@
 
   <script>
     function runUpdate() {
-      parent.meshserver.send({
+    parent.meshserver.send({
         action: "plugin",
         plugin: "winpatch",
         pluginaction: "runUpdate",
         nodeId: parent.currentNode._id
-      });
+    });
     }
 
-    // Handle response from agent
     parent.pluginHandler.winpatch = {};
-    parent.pluginHandler.winpatch.updateResult = function(message) {
-    let text = "";
-    if (message.ok) {
-        text = message.stdout || "Update completed successfully.";
-    } else {
-        text = message.error || message.stderr || "Update failed.";
-    }
-    QH('output', text);
+    parent.pluginHandler.winpatch.updateResult = function(msg) {
+    QH('output', msg.output || "No output returned");
     };
 
   </script>
 </body>
 </html>
+
+
+

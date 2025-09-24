@@ -14,7 +14,6 @@ function consoleaction(args, rights, sessionid, parent) {
             var cmd;
 
             if (os === "win32") {
-                // Needs PSWindowsUpdate on endpoint
                 cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
             } else {
                 cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
@@ -25,10 +24,8 @@ function consoleaction(args, rights, sessionid, parent) {
                     action: "plugin",
                     plugin: "winpatch",
                     pluginaction: "updateResult",
-                    nodeId: parent.dbNodeKey,
                     ok: (exitCode === 0),
-                    stdout: stdout ? stdout.toString() : "",
-                    stderr: stderr ? stderr.toString() : ""
+                    output: stderr && stderr.length ? stderr.toString() : stdout.toString()
                 });
             });
         }
@@ -37,12 +34,10 @@ function consoleaction(args, rights, sessionid, parent) {
             action: "plugin",
             plugin: "winpatch",
             pluginaction: "updateResult",
-            nodeId: parent.dbNodeKey,
             ok: false,
-            error: e.toString()
+            output: "Execution failed: " + e.toString()
         });
     }
 }
 
 module.exports = { consoleaction: consoleaction };
-
