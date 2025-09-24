@@ -1,7 +1,7 @@
 /**
  * winpatch.js
  * MeshCentral plugin (UI + server) for simple patch/command run
- * version: v0.2.3
+ * version: v0.2.4
  *
  * - Exports: onDeviceRefreshEnd (client hook)
  * - Server: registers plugin handler under parent.webserver.pluginHandler['winpatch']
