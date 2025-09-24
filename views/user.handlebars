@@ -1,0 +1,27 @@
+<html>
+<head>
+    <script type="text/javascript" src="scripts/common-0.0.1.js"></script>
+</head>
+<body>
+  <h3>Windows Patch Management</h3>
+  <button onclick="runUpdate()">Run Windows Update</button>
+  <pre id="output"></pre>
+
+  <script>
+    function runUpdate() {
+      parent.meshserver.send({
+        action: "plugin",
+        plugin: "winpatch",
+        pluginaction: "runUpdate",
+        nodeId: parent.currentNode._id
+      });
+    }
+
+    // Handle response from agent
+    parent.pluginHandler.winpatch = {};
+    parent.pluginHandler.winpatch.updateResult = function(message) {
+      QH('output', message.output || "No output");
+    };
+  </script>
+</body>
+</html>
