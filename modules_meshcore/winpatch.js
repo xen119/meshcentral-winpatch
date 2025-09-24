@@ -29,23 +29,37 @@ function consoleaction(args, rights, sessionid, parent) {
                 child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
                     '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'Install-WindowsUpdate -AcceptAll -AutoReboot'
                 ], { windowsHide: true }, function(error, stdout, stderr){
-                    parent.SendCommand({
-                        action: "plugin",
-                        plugin: "winpatch",
-                        pluginaction: "updateResult",
-                        ok: !error,
-                        output: (stderr && stderr.length ? stderr.toString() : stdout.toString()) || (error ? String(error) : '')
-                    });
+                    try {
+                        var out = (stdout == null ? '' : String(stdout));
+                        var err = (stderr == null ? '' : String(stderr));
+                        var errMsg = (error == null ? '' : String(error));
+                        parent.SendCommand({
+                            action: "plugin",
+                            plugin: "winpatch",
+                            pluginaction: "updateResult",
+                            ok: !error,
+                            output: err || out || errMsg
+                        });
+                    } catch (ex) {
+                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", ok: false, output: 'Callback error: ' + String(ex) });
+                    }
                 });
             } else {
                 child = cp.exec(cmd, function(error, stdout, stderr){
-                    parent.SendCommand({
-                        action: "plugin",
-                        plugin: "winpatch",
-                        pluginaction: "updateResult",
-                        ok: !error,
-                        output: (stderr && stderr.length ? stderr.toString() : stdout.toString()) || (error ? String(error) : '')
-                    });
+                    try {
+                        var out = (stdout == null ? '' : String(stdout));
+                        var err = (stderr == null ? '' : String(stderr));
+                        var errMsg = (error == null ? '' : String(error));
+                        parent.SendCommand({
+                            action: "plugin",
+                            plugin: "winpatch",
+                            pluginaction: "updateResult",
+                            ok: !error,
+                            output: err || out || errMsg
+                        });
+                    } catch (ex) {
+                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", ok: false, output: 'Callback error: ' + String(ex) });
+                    }
                 });
             }
         }
