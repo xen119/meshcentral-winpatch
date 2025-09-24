@@ -9,6 +9,7 @@
 
   <script>
     function runUpdate() {
+    if (parent && parent.showtab) { try { parent.showtab('pluginWinPatch'); } catch (e) {} }
     parent.meshserver.send({
         action: "plugin",
         plugin: "winpatch",
