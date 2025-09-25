@@ -72,7 +72,17 @@ module.exports.winpatch = function (parent) {
                 break;
 
             case "updateResult":
-                console.log("winpatch: result:", command.output);
+                try { console.log("winpatch: result:", command.output); } catch(_){ }
+                try {
+                    var k = command.nodeid || command.nodeId || '_';
+                    obj.lastResults[k] = command;
+                } catch(_){ }
+                // Dispatch to plugin tab listeners
+                try { if (typeof pluginHandler !== 'undefined' && pluginHandler.dispatchEvent) { pluginHandler.dispatchEvent('winpatch', command); } } catch(_){ }
+                // Proactively dispatch to UI sessions as plugin event
+                try {
+                    obj.parent.parent.webserver.DispatchEvent(['server-users'], obj, { nolog: true, action: 'plugin', plugin: 'winpatch', pluginaction: 'updateResult', nodeid: command.nodeid || command.nodeId, output: command.output });
+                } catch(_){ }
                 break;
         }
     };

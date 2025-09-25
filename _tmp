@@ -1,0 +1,120 @@
+        .then((file) => {
+          if (file.type == 'folder') return obj.db.deleteByPath(file.path); //@TODO delete schedules for scripts within folders
+          if (file.type == 'script') return obj.db.deleteSchedulesForScript(file._id);
+          if (file.type == 'jobSchedule') return obj.db.deletePendingJobsForSchedule(file._id);
+        })
+        .then(() => {
+          return obj.db.delete(command.id)
+        })
+        .then(() => {
+          var updateObj = { tree: true };
+          if (delObj.type == 'jobSchedule') {
+              updateObj.scriptId = delObj.scriptId;
+              updateObj.nodeId = delObj.node;
+          }
+          return obj.updateFrontEnd( updateObj );
+        })
+        .catch(e => { console.log('PLUGIN: ScriptTask: Error deleting ', e.stack); });
+    };
+    
+    obj.serveraction = function(command, myparent, grandparent) {
+        switch (command.pluginaction) {
+            case 'addScript':
+                obj.db.addScript(command.name, command.content, command.path, command.filetype)
+                .then(() => {
+                    obj.updateFrontEnd( { tree: true } );
+                });            
+            break;
+            case 'new':
+                var parent_path = '';
+                var new_path = '';
+                obj.db.get(command.parent_id)
+                .then(found => {
+                  if (found.length > 0) {
+                      var file = found[0];
+                      parent_path = file.path;
+                  } else {
+                      parent_path = 'Shared';
+                  }
+                })
+                .then(() => {
+                    obj.db.addScript(command.name, '', parent_path, command.filetype)
+                })
+                .then(() => {
+                    obj.updateFrontEnd( { tree: true } );
+                });
+            break;
+            case 'rename':
+              obj.db.get(command.id)
+              .then((docs) => {
+                  var doc = docs[0];
+                  if (doc.type == 'folder') {
+                      console.log('old', doc.path, 'new', doc.path.replace(doc.path, command.name));
+                      return obj.db.update(command.id, { path: doc.path.replace(doc.name, command.name) })
+                      .then(() => { // update sub-items
+                          return obj.db.getByPath(doc.path)
+                      })
+                      .then((found) => {
+                          if (found.length > 0) {
+                            var proms = [];
+                            found.forEach(f => {
+                              proms.push(obj.db.update(f._id, { path: doc.path.replace(doc.name, command.name) } ));
+                            })
+                            return Promise.all(proms);
+                          }
+                      })
+                  } else {
+                      return Promise.resolve();
+                  }
+              })
+              .then(() => {
+                  obj.db.update(command.id, { name: command.name })
+              })
+              .then(() => {
+                  return obj.db.updateScriptJobName(command.id, command.name);
+              })
+              .then(() => {
+                  obj.updateFrontEnd( { scriptId: command.id, nodeId: command.currentNodeId, tree: true } );
+              });
+            break;
+            case 'move':
+              var toPath = null, fromPath = null, parentType = null;
+              obj.db.get(command.to)
+              .then(found => { // get target data
+                  if (found.length > 0) {
+                    var file = found[0];
+                    toPath = file.path;
+                  } else throw Error('Target destination not found');
+              })
+              .then(() => { // get item to be moved
+                return obj.db.get(command.id);
+              })
+              .then((found) => { // set item to new location
+                  var file = found[0];
+                  if (file.type == 'folder') {
+                    fromPath = file.path;
+                    toPath += '/' + file.name;
+                    parentType = 'folder';
+                    if (file.name == 'Shared' && file.path == 'Shared') throw Error('Cannot move top level directory: Shared');
+                  }
+                  return obj.db.update(command.id, { path: toPath } );
+              })
+              .then(() => { // update sub-items
+                  return obj.db.getByPath(fromPath)
+              })
+              .then((found) => {
+                  if (found.length > 0) {
+                    var proms = [];
+                    found.forEach(f => {
+                      proms.push(obj.db.update(f._id, { path: toPath } ));
+                    })
+                    return Promise.all(proms);
+                  }
+              })
+              .then(() => {
+                return obj.updateFrontEnd( { tree: true } );
+              })
+              .catch(e => { console.log('PLUGIN: ScriptTask: Error moving ', e.stack); });
+            break;
+            case 'newFolder':
+              var parent_path = '';

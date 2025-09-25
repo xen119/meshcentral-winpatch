@@ -26,7 +26,7 @@
         tries++;
         fetch('/pluginadmin.ashx?pin=winpatch&user=1&latest=1&node=' + encodeURIComponent(parent.currentNode._id))
         .then(function(r){ return r.json(); })
-        .then(function(j){ if (j && j.output) { QH('output', j.output); clearInterval(timer); } })
+        .then(function(j){ if (j && (typeof j.output !== 'undefined' && j.output !== null)) { QH('output', String(j.output)); clearInterval(timer); } })
         .catch(function(_){});
         if (tries >= maxTries) { clearInterval(timer); }
       }, 2000);
@@ -36,7 +36,8 @@
     parent.pluginHandler.winpatch = parent.pluginHandler.winpatch || {};
     parent.pluginHandler.winpatch.updateResult = function(msg) {
       try { console.log('winpatch UI updateResult:', msg); } catch (e) {}
-      QH('output', (msg && msg.output) ? msg.output : "No output returned");
+      var hasOut = (msg && (typeof msg.output !== 'undefined' && msg.output !== null));
+      QH('output', hasOut ? String(msg.output) : "No output returned");
     };
 
     // Generic catch-all to observe any plugin messages reaching the iframe
@@ -44,7 +45,8 @@
       parent.pluginHandler.winpatchAny = function(msg) {
         try { console.log('winpatch UI any:', msg); } catch (e) {}
         if (msg && msg.plugin === 'winpatch') {
-          QH('output', (msg.output ? msg.output : JSON.stringify(msg)));
+          var hasOut = (typeof msg.output !== 'undefined' && msg.output !== null);
+          QH('output', hasOut ? String(msg.output) : JSON.stringify(msg));
         }
       };
     }
