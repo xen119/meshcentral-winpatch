@@ -34,14 +34,23 @@ function consoleaction(args, rights, sessionid, parent) {
                     try {
                         var out = (stdout == null ? '' : String(stdout));
                         var err = (stderr == null ? '' : String(stderr));
-                        var errMsg = (error == null ? '' : String(error));
+                        var exitCode = (error && typeof error.code === 'number') ? error.code : 0;
+                        var message = '';
+                        if (out && out.trim().length) { message = out.trim(); }
+                        if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
+                        if (!message) {
+                            message = 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
+                        }
                         parent.SendCommand({
                             action: "plugin",
                             plugin: "winpatch",
                             pluginaction: "updateResult",
                             nodeid: nodeid,
                             ok: !error,
-                            output: err || out || errMsg
+                            exitCode: exitCode,
+                            stdout: out,
+                            stderr: err,
+                            output: message
                         });
                     } catch (ex) {
                         parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
@@ -52,14 +61,23 @@ function consoleaction(args, rights, sessionid, parent) {
                     try {
                         var out = (stdout == null ? '' : String(stdout));
                         var err = (stderr == null ? '' : String(stderr));
-                        var errMsg = (error == null ? '' : String(error));
+                        var exitCode = (error && typeof error.code === 'number') ? error.code : 0;
+                        var message = '';
+                        if (out && out.trim().length) { message = out.trim(); }
+                        if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
+                        if (!message) {
+                            message = 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
+                        }
                         parent.SendCommand({
                             action: "plugin",
                             plugin: "winpatch",
                             pluginaction: "updateResult",
                             nodeid: nodeid,
                             ok: !error,
-                            output: err || out || errMsg
+                            exitCode: exitCode,
+                            stdout: out,
+                            stderr: err,
+                            output: message
                         });
                     } catch (ex) {
                         parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
