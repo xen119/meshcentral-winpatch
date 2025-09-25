@@ -79,14 +79,15 @@ module.exports.winpatch = function (parent) {
 
     obj.server_startup = function () {
         if (parent.parent.AddPluginHandler) {
+            try { console.log('winpatch: registering agent message handler'); } catch(_){ }
             parent.parent.AddPluginHandler("winpatch", function (msg) {
                 // msg comes from sendAgentMsg in meshcore
                 if (msg && msg.pluginaction === "updateResult") {
                     try { console.log("winpatch: agent message:", JSON.stringify(msg)); } catch (ex) { }
                     // Cache last result per node (if provided)
                     try { var k = msg.nodeid || msg.nodeId || '_'; obj.lastResults[k] = msg; } catch (e) { }
-                    // Relay to any web tabs
-                    pluginHandler.dispatchEvent("winpatch", msg);
+                    // Relay to any web tabs (if available in this context)
+                    try { if (typeof pluginHandler !== 'undefined' && pluginHandler.dispatchEvent) { pluginHandler.dispatchEvent("winpatch", msg); } } catch (_) {}
                     // Also emit to active user sessions as a fallback
                     try {
                         obj.parent.parent.webserver.DispatchEvent(['server-users'], obj, { nolog: true, action: 'plugin', plugin: 'winpatch', pluginaction: 'updateResult', output: msg.output });
@@ -95,7 +96,8 @@ module.exports.winpatch = function (parent) {
             });
         }
     };
-
+    // Ensure agent message handler is registered on load
+    try { obj.server_startup(); } catch (e) { }
 
     return obj;
 }
