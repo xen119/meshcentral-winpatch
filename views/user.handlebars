@@ -5,32 +5,200 @@
 <body>
   <h3>Windows Patch Management</h3>
   <button onclick="runUpdate()">Run Windows Update</button>
-  <pre id="output"></pre>
+
+  <section id="scheduleSection" style="margin-top:16px;">
+    <h4>Scheduled Updates</h4>
+    <div id="scheduleSummary" class="muted">Schedule not configured.</div>
+    <div class="form-row" style="margin-top:8px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+      <label>Frequency
+        <select id="scheduleFrequency" onchange="toggleDayOfWeekField()">
+          <option value="none">Manual only</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+        </select>
+      </label>
+      <label id="dayOfWeekWrapper" style="display:none;">
+        Day
+        <select id="scheduleDay">
+          <option value="0">Sunday</option>
+          <option value="1">Monday</option>
+          <option value="2">Tuesday</option>
+          <option value="3">Wednesday</option>
+          <option value="4">Thursday</option>
+          <option value="5">Friday</option>
+          <option value="6">Saturday</option>
+        </select>
+      </label>
+      <label>Time
+        <input type="time" id="scheduleTime" value="02:00" />
+      </label>
+    </div>
+    <div class="form-row" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button onclick="saveSchedule()" type="button">Save Schedule</button>
+      <button onclick="clearSchedule()" type="button">Clear Schedule</button>
+    </div>
+    <div id="scheduleMessage" style="margin-top:6px; color:#555;"></div>
+  </section>
+
+  <pre id="output" style="margin-top:16px;"></pre>
 
   <script>
+    var winpatchResultPoll = null;
+    var winpatchScheduleNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var winpatchCurrentSchedule = null;
+
+    function G(id) { return document.getElementById(id); }
+
+    function currentNodeId() {
+      return parent && parent.currentNode ? parent.currentNode._id : null;
+    }
+
     function runUpdate() {
-    if (parent && parent.showtab) { try { parent.showtab('pluginWinPatch'); } catch (e) {} }
-    try { QH('output', 'Running...'); } catch(e) {}
-    parent.meshserver.send({
+      if (parent && parent.showtab) { try { parent.showtab('pluginWinPatch'); } catch (e) {} }
+      try { QH('output', 'Running...'); } catch(e) {}
+      var nodeId = currentNodeId();
+      if (!nodeId || !parent.meshserver) { setScheduleMessage('Unable to determine device context.', 'error'); return; }
+      parent.meshserver.send({
         action: "plugin",
         plugin: "winpatch",
         pluginaction: "runUpdate",
-        nodeId: parent.currentNode._id
-    });
+        nodeId: nodeId
+      });
+      startResultPoll(nodeId);
+    }
 
-    // Poll fallback: fetch latest result for this node until received
-    try {
-      var tries = 0;
-      var maxTries = 15; // ~30s at 2s interval
-      var timer = setInterval(function(){
-        tries++;
-        fetch('/pluginadmin.ashx?pin=winpatch&user=1&latest=1&node=' + encodeURIComponent(parent.currentNode._id))
-        .then(function(r){ return r.json(); })
-        .then(function(j){ if (j && (typeof j.output !== 'undefined' && j.output !== null)) { QH('output', String(j.output)); clearInterval(timer); } })
-        .catch(function(_){});
-        if (tries >= maxTries) { clearInterval(timer); }
-      }, 2000);
-    } catch(_){}
+    function startResultPoll(nodeId) {
+      try {
+        if (winpatchResultPoll) { clearInterval(winpatchResultPoll); }
+        var tries = 0;
+        var maxTries = 15; // ~30s at 2s interval
+        winpatchResultPoll = setInterval(function(){
+          tries++;
+          fetch('/pluginadmin.ashx?pin=winpatch&user=1&latest=1&node=' + encodeURIComponent(nodeId))
+            .then(function(r){ return r.json(); })
+            .then(function(j){ if (j && (typeof j.output !== 'undefined' && j.output !== null)) { QH('output', String(j.output)); clearInterval(winpatchResultPoll); winpatchResultPoll = null; } })
+            .catch(function(_){});
+          if (tries >= maxTries) { clearInterval(winpatchResultPoll); winpatchResultPoll = null; }
+        }, 2000);
+      } catch(_){}
+    }
+
+    function requestSchedule() {
+      var nodeId = currentNodeId();
+      if (!nodeId || !parent.meshserver) { return; }
+      parent.meshserver.send({
+        action: 'plugin',
+        plugin: 'winpatch',
+        pluginaction: 'getSchedule',
+        nodeId: nodeId
+      });
+    }
+
+    function saveSchedule() {
+      var nodeId = currentNodeId();
+      if (!nodeId || !parent.meshserver) { setScheduleMessage('Device context unavailable.', 'error'); return; }
+      var freq = G('scheduleFrequency').value;
+      if (freq === 'none') {
+        clearSchedule();
+        return;
+      }
+      var timeVal = G('scheduleTime').value || '02:00';
+      var payload = { frequency: freq, time: timeVal };
+      if (freq === 'weekly') {
+        payload.dayOfWeek = parseInt(G('scheduleDay').value, 10) || 0;
+      }
+      parent.meshserver.send({
+        action: 'plugin',
+        plugin: 'winpatch',
+        pluginaction: 'setSchedule',
+        nodeId: nodeId,
+        schedule: payload
+      });
+      setScheduleMessage('Saving schedule...', 'info');
+    }
+
+    function clearSchedule() {
+      var nodeId = currentNodeId();
+      if (!nodeId || !parent.meshserver) { setScheduleMessage('Device context unavailable.', 'error'); return; }
+      parent.meshserver.send({
+        action: 'plugin',
+        plugin: 'winpatch',
+        pluginaction: 'clearSchedule',
+        nodeId: nodeId
+      });
+      setScheduleMessage('Clearing schedule...', 'info');
+    }
+
+    function toggleDayOfWeekField() {
+      var wrapper = G('dayOfWeekWrapper');
+      if (!wrapper) { return; }
+      var freq = G('scheduleFrequency').value;
+      wrapper.style.display = (freq === 'weekly') ? 'inline-block' : 'none';
+    }
+
+    function populateScheduleForm(schedule) {
+      var freqEl = G('scheduleFrequency');
+      var timeEl = G('scheduleTime');
+      var dayEl = G('scheduleDay');
+      if (!schedule) {
+        freqEl.value = 'none';
+        timeEl.value = '02:00';
+        dayEl.value = '0';
+        toggleDayOfWeekField();
+        updateScheduleSummary(null);
+        return;
+      }
+      freqEl.value = schedule.frequency || 'none';
+      timeEl.value = schedule.time || '02:00';
+      dayEl.value = (typeof schedule.dayOfWeek !== 'undefined' && schedule.dayOfWeek !== null) ? schedule.dayOfWeek : '0';
+      toggleDayOfWeekField();
+      updateScheduleSummary(schedule);
+    }
+
+    function updateScheduleSummary(schedule) {
+      if (!G('scheduleSummary')) { return; }
+      if (!schedule) {
+        QH('scheduleSummary', 'Schedule not configured.');
+        return;
+      }
+      var parts = [];
+      if (schedule.enabled === false) {
+        parts.push('<strong>Status:</strong> Disabled');
+      } else {
+        var freqText = schedule.frequency === 'weekly'
+          ? 'Weekly on ' + winpatchScheduleNames[(schedule.dayOfWeek != null ? schedule.dayOfWeek : 0)]
+          : 'Daily';
+        parts.push('<strong>' + freqText + '</strong> at ' + (schedule.time || '02:00'));
+      }
+      parts.push('Next run: ' + formatDateTime(schedule.nextRun));
+      parts.push('Last run: ' + (schedule.lastRun ? formatDateTime(schedule.lastRun) : 'Never'));
+      if (schedule.lastStatus) { parts.push('Last status: ' + schedule.lastStatus); }
+      QH('scheduleSummary', parts.join('<br/>'));
+    }
+
+    function setScheduleMessage(text, type) {
+      var el = G('scheduleMessage');
+      if (!el) { return; }
+      el.textContent = text || '';
+      var color = '#555';
+      if (type === 'error') { color = '#c0392b'; }
+      else if (type === 'success') { color = '#2e7d32'; }
+      else if (type === 'info') { color = '#1a73e8'; }
+      el.style.color = color;
+      if (text) {
+        setTimeout(function(){ if (el.textContent === text) { el.textContent = ''; el.style.color = '#555'; } }, 5000);
+      }
+    }
+
+    function formatDateTime(value) {
+      if (!value && value !== 0) { return 'Pending'; }
+      try {
+        var dt = new Date(value);
+        if (isNaN(dt.getTime())) { return String(value); }
+        return dt.toLocaleString();
+      } catch (e) {
+        return String(value);
+      }
     }
 
     parent.pluginHandler.winpatch = parent.pluginHandler.winpatch || {};
@@ -40,16 +208,58 @@
       QH('output', hasOut ? String(msg.output) : "No output returned");
     };
 
-    // Generic catch-all to observe any plugin messages reaching the iframe
+    parent.pluginHandler.winpatch.scheduleData = function(msg) {
+      try { console.log('winpatch UI scheduleData:', msg); } catch (e) {}
+      winpatchCurrentSchedule = msg ? msg.schedule : null;
+      populateScheduleForm(winpatchCurrentSchedule);
+      setScheduleMessage('', '');
+    };
+
+    parent.pluginHandler.winpatch.scheduleSaved = function(msg) {
+      winpatchCurrentSchedule = msg ? msg.schedule : null;
+      populateScheduleForm(winpatchCurrentSchedule);
+      setScheduleMessage('Schedule saved.', 'success');
+    };
+
+    parent.pluginHandler.winpatch.scheduleCleared = function(msg) {
+      winpatchCurrentSchedule = null;
+      populateScheduleForm(null);
+      setScheduleMessage('Schedule cleared.', 'success');
+    };
+
+    parent.pluginHandler.winpatch.scheduleError = function(msg) {
+      var text = msg && msg.message ? msg.message : 'Schedule error.';
+      setScheduleMessage(text, 'error');
+    };
+
+    parent.pluginHandler.winpatch.scheduleTriggered = function(msg) {
+      winpatchCurrentSchedule = msg ? msg.schedule : winpatchCurrentSchedule;
+      if (winpatchCurrentSchedule) { updateScheduleSummary(winpatchCurrentSchedule); }
+      var when = msg && msg.schedule && msg.schedule.lastRun ? formatDateTime(msg.schedule.lastRun) : new Date().toLocaleString();
+      setScheduleMessage('Scheduled update queued at ' + when + '.', 'info');
+    };
+
+    parent.pluginHandler.winpatch.runUpdateFailed = function(msg) {
+      var text = msg && msg.message ? msg.message : 'Could not queue update.';
+      setScheduleMessage(text, 'error');
+    };
+
     if (!parent.pluginHandler.winpatchAny) {
       parent.pluginHandler.winpatchAny = function(msg) {
         try { console.log('winpatch UI any:', msg); } catch (e) {}
-        if (msg && msg.plugin === 'winpatch') {
-          var hasOut = (typeof msg.output !== 'undefined' && msg.output !== null);
-          QH('output', hasOut ? String(msg.output) : JSON.stringify(msg));
+        if (msg && msg.plugin === 'winpatch' && msg.pluginaction === 'updateResult') {
+          parent.pluginHandler.winpatch.updateResult(msg);
         }
       };
     }
+
+    function initWinpatch() {
+      toggleDayOfWeekField();
+      setScheduleMessage('', '');
+      setTimeout(requestSchedule, 300);
+    }
+
+    initWinpatch();
 
   </script>
 </body>

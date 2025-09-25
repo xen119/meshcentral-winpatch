@@ -15,11 +15,201 @@
 
 "use strict";
 
+var fs = require('fs');
+var path = require('path');
+
 module.exports.winpatch = function (parent) {
     var obj = {};
     obj.parent = parent;
     obj.VIEWS = __dirname + '/views/';
     obj.lastResults = {};
+    obj.scheduleFile = path.join(__dirname, 'winpatch-schedules.json');
+    obj.schedules = {};
+    obj.scheduleTimer = null;
+
+    function loadSchedules() {
+        try {
+            if (fs.existsSync(obj.scheduleFile)) {
+                var raw = fs.readFileSync(obj.scheduleFile, 'utf8');
+                obj.schedules = JSON.parse(raw || '{}') || {};
+            }
+        } catch (e) {
+            obj.schedules = {};
+        }
+
+        var now = new Date();
+        var needsSave = false;
+        Object.keys(obj.schedules).forEach(function (nodeId) {
+            var sched = obj.schedules[nodeId];
+            if (!sched || typeof sched !== 'object') { delete obj.schedules[nodeId]; needsSave = true; return; }
+            if (!sched.frequency || !sched.time) { return; }
+            if (!sched.enabled && typeof sched.enabled !== 'undefined') { return; }
+            if (!sched.nextRun || isNaN(Number(sched.nextRun)) || Number(sched.nextRun) <= now.getTime()) {
+                sched.nextRun = computeNextRun(sched, now);
+                needsSave = true;
+            }
+        });
+
+        if (needsSave) { saveSchedules(); }
+    }
+
+    function saveSchedules() {
+        try {
+            fs.writeFileSync(obj.scheduleFile, JSON.stringify(obj.schedules, null, 2));
+        } catch (e) {
+            console.log('winpatch: unable to save schedules', e);
+        }
+    }
+
+    function cloneSchedule(schedule) {
+        return schedule ? JSON.parse(JSON.stringify(schedule)) : null;
+    }
+
+    function computeNextRun(schedule, fromDate) {
+        try {
+            var base = fromDate ? new Date(fromDate) : new Date();
+            var parts = (schedule.time || '02:00').split(':');
+            var hour = parseInt(parts[0], 10);
+            var minute = parseInt(parts[1], 10);
+            if (isNaN(hour) || isNaN(minute)) { hour = 2; minute = 0; }
+
+            var target = new Date(base);
+            target.setSeconds(0, 0);
+            target.setHours(hour, minute, 0, 0);
+
+            if (schedule.frequency === 'weekly') {
+                var desired = typeof schedule.dayOfWeek === 'number' ? schedule.dayOfWeek : parseInt(schedule.dayOfWeek || 0, 10);
+                if (isNaN(desired) || desired < 0 || desired > 6) { desired = 0; }
+                var current = target.getDay();
+                var diff = (desired - current + 7) % 7;
+                if (diff === 0 && target <= base) { diff = 7; }
+                target.setDate(target.getDate() + diff);
+            } else { // daily default
+                if (target <= base) {
+                    target.setDate(target.getDate() + 1);
+                }
+            }
+
+            return target.getTime();
+        } catch (e) {
+            return Date.now() + (6 * 60 * 60 * 1000); // fallback 6 hours later
+        }
+    }
+
+    function dispatchToUi(message) {
+        try {
+            message = message || {};
+            message.plugin = 'winpatch';
+            if (typeof pluginHandler !== 'undefined' && pluginHandler.dispatchEvent) {
+                pluginHandler.dispatchEvent('winpatch', message);
+            }
+        } catch (e) {}
+    }
+
+    function sendRunUpdate(nodeId, reason) {
+        if (!nodeId) { return false; }
+        try {
+            var agent = obj.parent.parent.webserver.wsagents[nodeId];
+            if (!agent) { throw new Error('agent offline'); }
+            agent.send(JSON.stringify({
+                action: 'plugin',
+                plugin: 'winpatch',
+                pluginaction: 'runUpdate',
+                nodeId: nodeId,
+                reason: reason || 'manual'
+            }));
+            return true;
+        } catch (e) {
+            console.log('winpatch: failed to send command', e);
+            return false;
+        }
+    }
+
+    function evaluateSchedules() {
+        var now = Date.now();
+        var changed = false;
+        Object.keys(obj.schedules).forEach(function (nodeId) {
+            var sched = obj.schedules[nodeId];
+            if (!sched || sched.enabled === false) { return; }
+            if (!sched.nextRun) {
+                sched.nextRun = computeNextRun(sched);
+                changed = true;
+                return;
+            }
+            if (sched.nextRun <= now) {
+                var success = sendRunUpdate(nodeId, 'scheduled');
+                sched.lastRun = now;
+                sched.lastStatus = success ? 'queued' : 'agent offline';
+                sched.nextRun = computeNextRun(sched, new Date(now + 60000));
+                changed = true;
+                dispatchToUi({ pluginaction: 'scheduleTriggered', nodeId: nodeId, schedule: cloneSchedule(sched) });
+            }
+        });
+        if (changed) { saveSchedules(); }
+    }
+
+    function ensureScheduleTimer() {
+        if (obj.scheduleTimer) { return; }
+        obj.scheduleTimer = setInterval(evaluateSchedules, 60 * 1000);
+        // run soon after startup
+        setTimeout(evaluateSchedules, 5 * 1000);
+    }
+
+    function handleSetSchedule(nodeId, scheduleInput) {
+        if (!nodeId) {
+            dispatchToUi({ pluginaction: 'scheduleError', nodeId: nodeId, message: 'Missing node id for schedule.' });
+            return;
+        }
+
+        var frequency = (scheduleInput.frequency || '').toLowerCase();
+        if (frequency !== 'daily' && frequency !== 'weekly') {
+            dispatchToUi({ pluginaction: 'scheduleError', nodeId: nodeId, message: 'Unsupported frequency. Choose daily or weekly.' });
+            return;
+        }
+
+        var time = scheduleInput.time || '02:00';
+        if (!/^\d{1,2}:\d{2}$/.test(time)) {
+            dispatchToUi({ pluginaction: 'scheduleError', nodeId: nodeId, message: 'Time must be in HH:MM format.' });
+            return;
+        }
+
+        var enabled = (scheduleInput.enabled === false) ? false : true;
+        var dayOfWeek = null;
+        if (frequency === 'weekly') {
+            dayOfWeek = parseInt(scheduleInput.dayOfWeek, 10);
+            if (isNaN(dayOfWeek) || dayOfWeek < 0 || dayOfWeek > 6) { dayOfWeek = 0; }
+        }
+
+        var schedule = {
+            nodeId: nodeId,
+            frequency: frequency,
+            time: time,
+            dayOfWeek: dayOfWeek,
+            enabled: enabled,
+            lastRun: obj.schedules[nodeId] ? obj.schedules[nodeId].lastRun || null : null
+        };
+
+        schedule.nextRun = computeNextRun(schedule);
+
+        obj.schedules[nodeId] = schedule;
+        saveSchedules();
+        dispatchToUi({ pluginaction: 'scheduleSaved', nodeId: nodeId, schedule: cloneSchedule(schedule) });
+    }
+
+    function handleClearSchedule(nodeId) {
+        if (!nodeId) {
+            dispatchToUi({ pluginaction: 'scheduleError', nodeId: nodeId, message: 'Missing node id.' });
+            return;
+        }
+        if (obj.schedules[nodeId]) {
+            delete obj.schedules[nodeId];
+            saveSchedules();
+        }
+        dispatchToUi({ pluginaction: 'scheduleCleared', nodeId: nodeId });
+    }
+
+    loadSchedules();
+    ensureScheduleTimer();
 
     obj.exports = [ "onDeviceRefreshEnd" ];
 
@@ -57,18 +247,25 @@ module.exports.winpatch = function (parent) {
 
     // --- Handle actions from UI ---
     obj.serveraction = function (command) {
-        switch (command.pluginaction) {
+        var action = command.pluginaction;
+        var nodeId = command.nodeId || command.nodeid;
+        switch (action) {
             case "runUpdate":
-                try {
-                    obj.parent.parent.webserver.wsagents[command.nodeId].send(JSON.stringify({
-                        action: "plugin",
-                        plugin: "winpatch",
-                        pluginaction: "runUpdate",
-                        nodeId: command.nodeId
-                    }));
-                } catch (e) {
-                    console.log("winpatch: failed to send command", e);
+                if (!sendRunUpdate(nodeId, 'manual')) {
+                    dispatchToUi({ pluginaction: 'runUpdateFailed', nodeId: nodeId, message: 'Agent is offline or command could not be queued.' });
                 }
+                break;
+
+            case "getSchedule":
+                dispatchToUi({ pluginaction: 'scheduleData', nodeId: nodeId, schedule: cloneSchedule(obj.schedules[nodeId]) });
+                break;
+
+            case "setSchedule":
+                handleSetSchedule(nodeId, command.schedule || {});
+                break;
+
+            case "clearSchedule":
+                handleClearSchedule(nodeId);
                 break;
 
             case "updateResult":
@@ -76,13 +273,21 @@ module.exports.winpatch = function (parent) {
                 try {
                     var k = command.nodeid || command.nodeId || '_';
                     obj.lastResults[k] = command;
+                    if (obj.schedules[k]) {
+                        obj.schedules[k].lastStatus = (command.ok === false) ? 'failed' : 'completed';
+                        obj.schedules[k].lastRun = Date.now();
+                        saveSchedules();
+                        dispatchToUi({ pluginaction: 'scheduleData', nodeId: k, schedule: cloneSchedule(obj.schedules[k]) });
+                    }
                 } catch(_){ }
                 // Dispatch to plugin tab listeners
-                try { if (typeof pluginHandler !== 'undefined' && pluginHandler.dispatchEvent) { pluginHandler.dispatchEvent('winpatch', command); } } catch(_){ }
+                dispatchToUi(command);
                 // Proactively dispatch to UI sessions as plugin event
                 try {
                     obj.parent.parent.webserver.DispatchEvent(['server-users'], obj, { nolog: true, action: 'plugin', plugin: 'winpatch', pluginaction: 'updateResult', nodeid: command.nodeid || command.nodeId, output: command.output });
                 } catch(_){ }
+                break;
+            default:
                 break;
         }
     };
@@ -96,8 +301,7 @@ module.exports.winpatch = function (parent) {
                     try { console.log("winpatch: agent message:", JSON.stringify(msg)); } catch (ex) { }
                     // Cache last result per node (if provided)
                     try { var k = msg.nodeid || msg.nodeId || '_'; obj.lastResults[k] = msg; } catch (e) { }
-                    // Relay to any web tabs (if available in this context)
-                    try { if (typeof pluginHandler !== 'undefined' && pluginHandler.dispatchEvent) { pluginHandler.dispatchEvent("winpatch", msg); } } catch (_) {}
+                    dispatchToUi(msg);
                     // Also emit to active user sessions as a fallback
                     try {
                         obj.parent.parent.webserver.DispatchEvent(['server-users'], obj, { nolog: true, action: 'plugin', plugin: 'winpatch', pluginaction: 'updateResult', output: msg.output });

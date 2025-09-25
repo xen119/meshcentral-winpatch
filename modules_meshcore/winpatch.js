@@ -38,7 +38,9 @@ function consoleaction(args, rights, sessionid, parent) {
                         if (out && out.trim().length) { message = out.trim(); }
                         if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
                         if (!message) {
-                            message = 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
+                            message = (!error && exitCode === 0)
+                                ? 'No updates available (PSWindowsUpdate returned no output).'
+                                : 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
                         }
                         parent.SendCommand({
                             action: "plugin",
@@ -65,7 +67,9 @@ function consoleaction(args, rights, sessionid, parent) {
                         if (out && out.trim().length) { message = out.trim(); }
                         if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
                         if (!message) {
-                            message = 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
+                            message = (!error && exitCode === 0)
+                                ? 'No updates available (command produced no output).'
+                                : 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
                         }
                         parent.SendCommand({
                             action: "plugin",
