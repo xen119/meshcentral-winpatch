@@ -29,7 +29,7 @@ function consoleaction(args, rights, sessionid, parent) {
                 // Execute PowerShell with arguments
                 // For wiring test, emit a simple message. Swap back to PSWindowsUpdate once verified.
                 child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
-                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'try { Import-Module PSWindowsUpdate -ErrorAction Stop; Install-WindowsUpdate -AcceptAll -AutoReboot -IgnoreReboot } catch { Write-Error $_ }'
+                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'try { Import-Module PSWindowsUpdate -ErrorAction Stop; $result = Install-WindowsUpdate -AcceptAll -AutoReboot -IgnoreReboot -Verbose *>&1; $result | Out-String } catch { $_ | Out-String }'
                 ], { windowsHide: true }, function(error, stdout, stderr){
                     try {
                         var out = (stdout == null ? '' : String(stdout));
