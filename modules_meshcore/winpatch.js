@@ -21,11 +21,9 @@ function consoleaction(args, rights, sessionid, parent) {
                 cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
             }
 
-            // Use Node-compatible child_process in MeshAgent modules_meshcore context
             var cp = require('child_process');
             var child;
             if (os === "win32") {
-                // Build PowerShell script as an array to avoid quoting issues
                 var psScriptLines = [
                     'try {',
                     '    if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {',
@@ -69,9 +67,9 @@ function consoleaction(args, rights, sessionid, parent) {
                     '        "=== Install-WindowsUpdate ===",',
                     '        $installText.TrimEnd()',
                     '    );',
-                    '    $output | Out-String',
+                    '    Write-Output ($output -join "`r`n")',
                     '} catch {',
-                    '    $_ | Out-String',
+                    '    Write-Output ($_ | Out-String)',
                     '}'
                 ];
                 var psScript = psScriptLines.join('\r\n');
