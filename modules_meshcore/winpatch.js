@@ -27,8 +27,64 @@ function consoleaction(args, rights, sessionid, parent) {
             var child;
             if (os === "win32") {
                 // Execute PowerShell with arguments: import PSWindowsUpdate and run Install-WindowsUpdate verbosely
+                var psScript = [
+                    "try {",
+                    "    if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {",
+                    "        throw \"PSWindowsUpdate module not found. Install it for all users with: Install-Module PSWindowsUpdate -Scope AllUsers\";",
+                    "    }",
+                    "",
+                    "    Import-Module PSWindowsUpdate -ErrorAction Stop;",
+                    "",
+                    "    $usedMicrosoftUpdate = $true;",
+                    "    $updates = Get-WindowsUpdate -MicrosoftUpdate -IgnoreUserInput -ErrorAction SilentlyContinue;",
+                    "    if (-not $updates) {",
+                    "        $usedMicrosoftUpdate = $false;",
+                    "        $updates = Get-WindowsUpdate -IgnoreUserInput -ErrorAction SilentlyContinue;",
+                    "    }",
+                    "",
+                    "    $scanSummary = if ($updates) {",
+                    "        $updates | Select-Object KBArticleID, Title, Size, MsrcSeverity, IsDownloaded, IsInstalled | Format-Table -AutoSize | Out-String",
+                    "    } else {",
+                    "        \"No applicable updates detected.\"",
+                    "    };",
+                    "",
+                    "    $installOutput = $null;",
+                    "    if ($updates) {",
+                    "        $installParams = @{",
+                    "            AcceptAll       = $true;",
+                    "            AutoReboot      = $true;",
+                    "            IgnoreReboot    = $true;",
+                    "            IgnoreUserInput = $true;",
+                    "            Verbose         = $true;",
+                    "            ErrorAction     = \"Continue\"",
+                    "        };",
+                    "        if ($usedMicrosoftUpdate) { $installParams[\"MicrosoftUpdate\"] = $true; }",
+                    "        $installOutput = Install-WindowsUpdate @installParams *>&1;",
+                    "    }",
+                    "",
+                    "    $installText = if ($installOutput) {",
+                    "        $installOutput | Out-String",
+                    "    } else {",
+                    "        \"Install-WindowsUpdate not invoked because no updates were returned by Get-WindowsUpdate.\"",
+                    "    };",
+                    "",
+                    "    $sourceInfo = \"Scan source: \" + ($usedMicrosoftUpdate ? \"Microsoft Update\" : \"Windows Update only\");",
+                    "    $output = @(",
+                    "        \"=== Get-WindowsUpdate ===\",
+                    "        $sourceInfo,",
+                    "        $scanSummary.TrimEnd(),",
+                    "        \"=== Install-WindowsUpdate ===\",
+                    "        $installText.TrimEnd()",
+                    "    );",
+                    "",
+                    "    $output | Out-String",
+                    "} catch {",
+                    "    $_ | Out-String",
+                    "}"
+                ].join("\n");
+
                 child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
-                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', 'try { if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) { throw "PSWindowsUpdate module not found. Install it for all users with: Install-Module PSWindowsUpdate -Scope AllUsers"; } Import-Module PSWindowsUpdate -ErrorAction Stop; $usedMicrosoftUpdate = $true; $updates = Get-WindowsUpdate -MicrosoftUpdate -IgnoreUserInput -ErrorAction SilentlyContinue; if (-not $updates) { $usedMicrosoftUpdate = $false; $updates = Get-WindowsUpdate -IgnoreUserInput -ErrorAction SilentlyContinue; } $scanSummary = if ($updates) { $updates | Select-Object KBArticleID, Title, Size, MsrcSeverity, IsDownloaded, IsInstalled | Format-Table -AutoSize | Out-String } else { "No applicable updates detected." }; $installOutput = $null; if ($updates) { $installParams = @{ AcceptAll = $true; AutoReboot = $true; IgnoreReboot = $true; IgnoreUserInput = $true; Verbose = $true; ErrorAction = 'Continue' }; if ($usedMicrosoftUpdate) { $installParams['MicrosoftUpdate'] = $true; } $installOutput = Install-WindowsUpdate @installParams *>&1; } $installText = if ($installOutput) { $installOutput | Out-String } else { "Install-WindowsUpdate not invoked because no updates were returned by Get-WindowsUpdate." }; $sourceInfo = 'Scan source: ' + ($usedMicrosoftUpdate ? 'Microsoft Update' : 'Windows Update only'); $output = @("=== Get-WindowsUpdate ===", $sourceInfo, $scanSummary.TrimEnd(), "=== Install-WindowsUpdate ===", $installText.TrimEnd()); $output | Out-String } catch { $_ | Out-String }'
+                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', psScript
                 ], { windowsHide: true }, function(error, stdout, stderr){
                     try {
                         var out = (stdout == null ? '' : String(stdout));
