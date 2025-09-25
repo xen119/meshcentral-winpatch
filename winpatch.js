@@ -71,6 +71,10 @@ module.exports.winpatch = function (parent) {
                     try { console.log("winpatch: agent message:", JSON.stringify(msg)); } catch (ex) { }
                     // Relay to any web tabs
                     pluginHandler.dispatchEvent("winpatch", msg);
+                    // Also emit to active user sessions as a fallback
+                    try {
+                        obj.parent.parent.webserver.DispatchEvent(['server-users'], obj, { nolog: true, action: 'plugin', plugin: 'winpatch', pluginaction: 'updateResult', output: msg.output });
+                    } catch (e) { }
                 }
             });
         }

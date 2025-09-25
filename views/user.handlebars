@@ -24,6 +24,16 @@
       QH('output', (msg && msg.output) ? msg.output : "No output returned");
     };
 
+    // Generic catch-all to observe any plugin messages reaching the iframe
+    if (!parent.pluginHandler.winpatchAny) {
+      parent.pluginHandler.winpatchAny = function(msg) {
+        try { console.log('winpatch UI any:', msg); } catch (e) {}
+        if (msg && msg.plugin === 'winpatch') {
+          QH('output', (msg.output ? msg.output : JSON.stringify(msg)));
+        }
+      };
+    }
+
   </script>
 </body>
 </html>
