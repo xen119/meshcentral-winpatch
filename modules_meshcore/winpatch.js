@@ -10,6 +10,7 @@ function consoleaction(args, rights, sessionid, parent) {
         if (!args || args.action !== "plugin" || args.plugin !== "winpatch") return;
 
         if (args.pluginaction === "runUpdate") {
+            var nodeid = args.nodeId || args.nodeid;
             var os = require("os").platform();
             var cmd;
 
@@ -38,11 +39,12 @@ function consoleaction(args, rights, sessionid, parent) {
                             action: "plugin",
                             plugin: "winpatch",
                             pluginaction: "updateResult",
+                            nodeid: nodeid,
                             ok: !error,
                             output: err || out || errMsg
                         });
                     } catch (ex) {
-                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", ok: false, output: 'Callback error: ' + String(ex) });
+                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
                     }
                 });
             } else {
@@ -55,11 +57,12 @@ function consoleaction(args, rights, sessionid, parent) {
                             action: "plugin",
                             plugin: "winpatch",
                             pluginaction: "updateResult",
+                            nodeid: nodeid,
                             ok: !error,
                             output: err || out || errMsg
                         });
                     } catch (ex) {
-                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", ok: false, output: 'Callback error: ' + String(ex) });
+                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
                     }
                 });
             }

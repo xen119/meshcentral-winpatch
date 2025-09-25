@@ -19,6 +19,7 @@ module.exports.winpatch = function (parent) {
     var obj = {};
     obj.parent = parent;
     obj.VIEWS = __dirname + '/views/';
+    obj.lastResults = {};
 
     obj.exports = [ "onDeviceRefreshEnd" ];
 
@@ -35,6 +36,18 @@ module.exports.winpatch = function (parent) {
 
     // --- Serve UI view ---
     obj.handleAdminReq = function (req, res, user) {
+        // JSON endpoint to fetch latest result (per node)
+        if (req.query.latest == 1) {
+            try {
+                var k = req.query.node || '_';
+                var m = obj.lastResults[k] || {};
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(m));
+                return;
+            } catch (ex) {
+                res.sendStatus(500); return;
+            }
+        }
         if (req.query.user == 1) {
             res.render(obj.VIEWS + 'user', {});
             return;
@@ -50,7 +63,8 @@ module.exports.winpatch = function (parent) {
                     obj.parent.parent.webserver.wsagents[command.nodeId].send(JSON.stringify({
                         action: "plugin",
                         plugin: "winpatch",
-                        pluginaction: "runUpdate"
+                        pluginaction: "runUpdate",
+                        nodeId: command.nodeId
                     }));
                 } catch (e) {
                     console.log("winpatch: failed to send command", e);
@@ -69,6 +83,8 @@ module.exports.winpatch = function (parent) {
                 // msg comes from sendAgentMsg in meshcore
                 if (msg && msg.pluginaction === "updateResult") {
                     try { console.log("winpatch: agent message:", JSON.stringify(msg)); } catch (ex) { }
+                    // Cache last result per node (if provided)
+                    try { var k = msg.nodeid || msg.nodeId || '_'; obj.lastResults[k] = msg; } catch (e) { }
                     // Relay to any web tabs
                     pluginHandler.dispatchEvent("winpatch", msg);
                     // Also emit to active user sessions as a fallback

@@ -10,12 +10,27 @@
   <script>
     function runUpdate() {
     if (parent && parent.showtab) { try { parent.showtab('pluginWinPatch'); } catch (e) {} }
+    try { QH('output', 'Running...'); } catch(e) {}
     parent.meshserver.send({
         action: "plugin",
         plugin: "winpatch",
         pluginaction: "runUpdate",
         nodeId: parent.currentNode._id
     });
+
+    // Poll fallback: fetch latest result for this node until received
+    try {
+      var tries = 0;
+      var maxTries = 15; // ~30s at 2s interval
+      var timer = setInterval(function(){
+        tries++;
+        fetch('/pluginadmin.ashx?pin=winpatch&user=1&latest=1&node=' + encodeURIComponent(parent.currentNode._id))
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.output) { QH('output', j.output); clearInterval(timer); } })
+        .catch(function(_){});
+        if (tries >= maxTries) { clearInterval(timer); }
+      }, 2000);
+    } catch(_){}
     }
 
     parent.pluginHandler.winpatch = parent.pluginHandler.winpatch || {};
