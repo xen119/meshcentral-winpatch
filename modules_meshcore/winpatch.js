@@ -12,17 +12,9 @@ function consoleaction(args, rights, sessionid, parent) {
         if (args.pluginaction === "runUpdate") {
             var nodeid = args.nodeId || args.nodeid;
             var os = require("os").platform();
-            var cmd;
-
-            if (os === "win32") {
-                // PSWindowsUpdate must be installed on the endpoint
-                cmd = "powershell.exe -Command Install-WindowsUpdate -AcceptAll -AutoReboot";
-            } else {
-                cmd = "bash -c 'apt-get update && apt-get -y upgrade'";
-            }
-
             var cp = require('child_process');
             var child;
+
             if (os === "win32") {
                 var psScriptLines = [
                     'try {',
@@ -67,72 +59,51 @@ function consoleaction(args, rights, sessionid, parent) {
                     '        "=== Install-WindowsUpdate ===",',
                     '        $installText.TrimEnd()',
                     '    );',
-                    '    Write-Output ($output -join "`r`n")',
+                    '    $output -join "`r`n"',
                     '} catch {',
-                    '    Write-Output ($_ | Out-String)',
+                    '    ($_ | Out-String).Trim()'
                     '}'
                 ];
                 var psScript = psScriptLines.join('\r\n');
+                var encodedScript = Buffer.from(psScript, 'utf16le').toString('base64');
 
                 child = cp.execFile(process.env['windir'] + '\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', [
-                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-Command', psScript
-                ], { windowsHide: true }, function(error, stdout, stderr){
-                    try {
-                        var out = (stdout == null ? '' : String(stdout));
-                        var err = (stderr == null ? '' : String(stderr));
-                        var exitCode = (error && typeof error.code === 'number') ? error.code : 0;
-                        var message = '';
-                        if (out && out.trim().length) { message = out.trim(); }
-                        if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
-                        if (!message) {
-                            message = (!error && exitCode === 0)
-                                ? 'No updates available (PSWindowsUpdate returned no output).'
-                                : 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
-                        }
-                        parent.SendCommand({
-                            action: "plugin",
-                            plugin: "winpatch",
-                            pluginaction: "updateResult",
-                            nodeid: nodeid,
-                            ok: !error,
-                            exitCode: exitCode,
-                            stdout: out,
-                            stderr: err,
-                            output: message
-                        });
-                    } catch (ex) {
-                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
-                    }
-                });
+                    '-NoLogo','-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand', encodedScript
+                ], { windowsHide: true }, handleResult);
             } else {
-                child = cp.exec(cmd, function(error, stdout, stderr){
-                    try {
-                        var out = (stdout == null ? '' : String(stdout));
-                        var err = (stderr == null ? '' : String(stderr));
-                        var exitCode = (error && typeof error.code === 'number') ? error.code : 0;
-                        var message = '';
-                        if (out && out.trim().length) { message = out.trim(); }
-                        if (err && err.trim().length) { message = message ? (message + '\n' + err.trim()) : err.trim(); }
-                        if (!message) {
-                            message = (!error && exitCode === 0)
-                                ? 'No updates available (command produced no output).'
-                                : 'Command completed (exit ' + exitCode + ') with no stdout/stderr.';
+                var linuxCmd = "bash -c 'apt-get update && apt-get -y upgrade'";
+                child = cp.exec(linuxCmd, handleResult);
+            }
+
+            function handleResult(error, stdout, stderr) {
+                try {
+                    var out = (stdout == null ? '' : stdout.toString());
+                    var err = (stderr == null ? '' : stderr.toString());
+                    var exitCode = (error && typeof error.code === 'number') ? error.code : 0;
+                    var messageParts = [];
+                    if (out && out.trim().length) { messageParts.push(out.trim()); }
+                    if (err && err.trim().length) { messageParts.push(err.trim()); }
+                    if (!messageParts.length) {
+                        if (!error && exitCode === 0) {
+                            messageParts.push('No updates available (command produced no output).');
+                        } else {
+                            messageParts.push('Command completed (exit ' + exitCode + ') with no stdout/stderr.');
                         }
-                        parent.SendCommand({
-                            action: "plugin",
-                            plugin: "winpatch",
-                            pluginaction: "updateResult",
-                            nodeid: nodeid,
-                            ok: !error,
-                            exitCode: exitCode,
-                            stdout: out,
-                            stderr: err,
-                            output: message
-                        });
-                    } catch (ex) {
-                        parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
                     }
-                });
+                    parent.SendCommand({
+                        action: "plugin",
+                        plugin: "winpatch",
+                        pluginaction: "updateResult",
+                        nodeid: nodeid,
+                        ok: !error,
+                        exitCode: exitCode,
+                        stdout: out,
+                        stderr: err,
+                        output: messageParts.join('\n\n')
+                    });
+                } catch (ex) {
+                    parent.SendCommand({ action: "plugin", plugin: "winpatch", pluginaction: "updateResult", nodeid: nodeid, ok: false, output: 'Callback error: ' + String(ex) });
+                }
             }
         }
     } catch (e) {
